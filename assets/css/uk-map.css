@@ -1,0 +1,316 @@
+/* =========================================================
+   UK Interactive Map — Stylesheet
+   ========================================================= */
+
+/* ----- Container ----- */
+.ukm-wrap {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+  max-width: 560px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* ----- SVG canvas ----- */
+#ukm-svg-root {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* ----- Region paths ----- */
+.ukm-region {
+  fill: #4a90d9;
+  stroke: #fff;
+  stroke-width: 2;
+  cursor: pointer;
+  transition: fill 0.18s ease, filter 0.18s ease;
+  outline: none;
+}
+
+.ukm-region:hover,
+.ukm-region:focus {
+  fill: #1a5fa8;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,.35));
+}
+
+.ukm-region.ukm-active {
+  fill: #e05c2a;
+}
+
+/* ----- SVG text labels ----- */
+.ukm-label {
+  font-size: 10px;
+  fill: #fff;
+  font-weight: 600;
+  pointer-events: none;
+  user-select: none;
+  text-anchor: middle;
+}
+
+/* =========================================================
+   Tooltip
+   ========================================================= */
+.ukm-tooltip {
+  position: fixed;
+  z-index: 9999;
+  background: #1a1a2e;
+  color: #f0f0f0;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  pointer-events: none;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  box-shadow: 0 4px 14px rgba(0,0,0,.4);
+}
+
+.ukm-tooltip.ukm-tooltip--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.ukm-tooltip::after {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-bottom-width: 0;
+  border-top-color: #1a1a2e;
+}
+
+/* =========================================================
+   Modal overlay
+   ========================================================= */
+.ukm-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.55);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.ukm-modal-overlay.ukm-modal--open {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* ----- Modal card ----- */
+.ukm-modal {
+  background: #fff;
+  border-radius: 12px;
+  padding: 28px 32px;
+  width: min(480px, 92vw);
+  position: relative;
+  box-shadow: 0 20px 60px rgba(0,0,0,.3);
+  transform: scale(0.92) translateY(16px);
+  transition: transform 0.22s cubic-bezier(.34,1.56,.64,1);
+}
+
+.ukm-modal-overlay.ukm-modal--open .ukm-modal {
+  transform: scale(1) translateY(0);
+}
+
+.ukm-modal__close {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  background: none;
+  border: none;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  color: #555;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.12s;
+}
+
+.ukm-modal__close:hover {
+  background: #f0f0f0;
+  color: #111;
+}
+
+.ukm-modal__flag {
+  width: 48px;
+  height: 32px;
+  margin-bottom: 12px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.ukm-modal__title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #111;
+  margin: 0 0 8px;
+}
+
+.ukm-modal__subtitle {
+  font-size: 13px;
+  color: #888;
+  margin: 0 0 14px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.ukm-modal__body {
+  font-size: 15px;
+  line-height: 1.6;
+  color: #444;
+  margin: 0 0 18px;
+}
+
+/* ----- stat chips ----- */
+.ukm-modal__stats {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.ukm-stat {
+  background: #f4f6fb;
+  border-radius: 8px;
+  padding: 8px 14px;
+  flex: 1 1 100px;
+}
+
+.ukm-stat__label {
+  font-size: 11px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  margin-bottom: 2px;
+}
+
+.ukm-stat__value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1a5fa8;
+}
+
+/* ----- CTA link ----- */
+.ukm-modal__link {
+  display: inline-block;
+  background: #1a5fa8;
+  color: #fff;
+  text-decoration: none;
+  padding: 10px 22px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  transition: background 0.15s;
+}
+
+.ukm-modal__link:hover {
+  background: #144c8a;
+  color: #fff;
+}
+
+.ukm-modal__link:empty {
+  display: none;
+}
+
+/* =========================================================
+   Popover (inline, anchored to region centroid)
+   ========================================================= */
+.ukm-popover {
+  position: absolute;
+  z-index: 9998;
+  background: #fff;
+  border-radius: 10px;
+  padding: 14px 18px;
+  width: 220px;
+  box-shadow: 0 8px 28px rgba(0,0,0,.2);
+  font-size: 13px;
+  color: #333;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(6px);
+  transition: opacity 0.16s ease, transform 0.16s ease, visibility 0.16s;
+}
+
+.ukm-popover.ukm-popover--visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.ukm-popover__title {
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 5px;
+  color: #111;
+}
+
+.ukm-popover__text {
+  line-height: 1.5;
+  color: #555;
+}
+
+/* =========================================================
+   Legend
+   ========================================================= */
+.ukm-legend {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.ukm-legend__item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: #555;
+  cursor: pointer;
+}
+
+.ukm-legend__swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  background: #4a90d9;
+  flex-shrink: 0;
+}
+
+/* =========================================================
+   Dark-mode support
+   ========================================================= */
+@media (prefers-color-scheme: dark) {
+  .ukm-modal {
+    background: #1e1e2e;
+    color: #e0e0e0;
+  }
+  .ukm-modal__title  { color: #f0f0f0; }
+  .ukm-modal__body   { color: #aaa; }
+  .ukm-modal__close  { color: #aaa; }
+  .ukm-modal__close:hover { background: #2a2a3e; color: #fff; }
+  .ukm-stat          { background: #2a2a3e; }
+  .ukm-stat__value   { color: #6ab0f5; }
+  .ukm-popover       { background: #1e1e2e; color: #ccc; }
+  .ukm-popover__title { color: #f0f0f0; }
+}
+
+/* =========================================================
+   Responsive
+   ========================================================= */
+@media (max-width: 480px) {
+  .ukm-modal { padding: 20px 18px; }
+  .ukm-modal__title { font-size: 18px; }
+}
