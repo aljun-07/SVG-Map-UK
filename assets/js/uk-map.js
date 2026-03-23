@@ -4,62 +4,292 @@
 
   document.addEventListener( 'DOMContentLoaded', init );
 
-  /* -------------------------------------------------------
-     State
-  ------------------------------------------------------- */
-  const tooltip   = createEl( 'div', 'ukm-tooltip' );
-  let   activeRegion = null;
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+
+  /* Shared floating tooltip */
+  const tooltip = ( function () {
+    const el = document.createElement( 'div' );
+    el.className = 'ukm-tooltip';
+    document.body.appendChild( el );
+    return el;
+  }() );
 
   /* -------------------------------------------------------
-     Bootstrap
+     Boot
   ------------------------------------------------------- */
   function init() {
-    document.body.appendChild( tooltip );
-
-    document.querySelectorAll( '.ukm-wrap' ).forEach( wrap => {
-      const mode = wrap.dataset.ukmMode || 'modal'; // modal | popover | tooltip
-      initMap( wrap, mode );
-    } );
+    document.querySelectorAll( '.ukm-wrap' ).forEach( initMap );
   }
 
   /* -------------------------------------------------------
-     Per-map setup
+     Per-map initialisation
   ------------------------------------------------------- */
-  function initMap( wrap, mode ) {
-    const svg     = wrap.querySelector( '#ukm-svg-root' );
-    const regions = wrap.querySelectorAll( '.ukm-region' );
+  function initMap( wrap ) {
+    const svg = wrap.querySelector( 'svg' );
+    if ( !svg ) return;
 
-    regions.forEach( path => {
-      const id   = path.dataset.region;
-      const info = getRegionData( id );
+    const panel       = wrap.querySelector( '.ukm-side-panel' );
+    const data        = ( typeof ukmData !== 'undefined' && ukmData.regions ) ? ukmData.regions : {};
+    const markerIcon  = ( typeof ukmData !== 'undefined' ) ? ( ukmData.markerIcon  || '' ) : '';
+    const markerColor = ( typeof ukmData !== 'undefined' ) ? ( ukmData.markerColor || '#e74c3c' ) : '#e74c3c';
 
-      /* accessibility */
+    let activeId   = null;
+    let searchTerm = '';
+
+    /* ---- Build sidebar skeleton (permanent) ---- */
+    panel.innerHTML =
+      '<div class="ukm-panel__search-wrap">'
+      + '<input type="search" class="ukm-panel__search" placeholder="Search projects\u2026" aria-label="Search projects">'
+      + '</div>'
+      + '<div class="ukm-panel__body"></div>';
+
+    panel.querySelector( '.ukm-panel__search' ).addEventListener( 'input', function () {
+      searchTerm = this.value;
+      renderSidebar();
+    } );
+
+    renderSidebar(); // Show all projects immediately
+
+    /* ---- Bind region paths ---- */
+    svg.querySelectorAll( '#features path' ).forEach( path => {
+      const id   = path.id;
+      if ( !id ) return;
+      const info = data[ id ] || { name: path.getAttribute( 'name' ) || id, projects: [] };
+
+      if ( info.color ) path.style.fill = info.color;
+
       path.setAttribute( 'tabindex', '0' );
       path.setAttribute( 'role', 'button' );
       path.setAttribute( 'aria-label', info.name || id );
 
-      /* custom colour */
-      if ( info.color ) path.style.fill = info.color;
-
-      /* ---- tooltip on hover (always) ---- */
-      path.addEventListener( 'mouseenter', e => showTooltip( e, info.name ) );
+      path.addEventListener( 'mouseenter', e => showTooltip( e, info.name || id ) );
       path.addEventListener( 'mousemove',  e => moveTooltip( e ) );
       path.addEventListener( 'mouseleave', hideTooltip );
 
-      /* ---- click / keyboard ---- */
-      const activate = () => {
-        if ( mode === 'modal' )   openModal( id, info );
-        if ( mode === 'popover' ) togglePopover( wrap, path, id, info );
-      };
-
-      path.addEventListener( 'click', activate );
+      path.addEventListener( 'click', () => handleActivate( id ) );
       path.addEventListener( 'keydown', e => {
-        if ( e.key === 'Enter' || e.key === ' ' ) {
-          e.preventDefault();
-          activate();
-        }
+        if ( e.key === 'Enter' || e.key === ' ' ) { e.preventDefault(); handleActivate( id ); }
       } );
     } );
+
+    /* ---- Place SVG markers ---- */
+    placeMarkers( svg, data, markerIcon, markerColor, handleActivate );
+
+    /* ---- Deselect when clicking outside the widget ---- */
+    document.addEventListener( 'click', e => {
+      if ( activeId && !wrap.contains( e.target ) ) {
+        handleActivate( null );
+      }
+    } );
+
+    /* =====================================================
+       Closures (share activeId / searchTerm / svg / panel)
+    ===================================================== */
+
+    function handleActivate( id ) {
+      /* Toggle: clicking the active region deselects it */
+      setActive( id === activeId ? null : id );
+      renderSidebar();
+    }
+
+    function setActive( id ) {
+      if ( activeId ) {
+        const prev = svg.getElementById( activeId );
+        if ( prev ) prev.classList.remove( 'ukm-active' );
+        svg.querySelectorAll( `.ukm-marker-group[data-rid="${ activeId }"]` )
+           .forEach( m => m.classList.remove( 'ukm-marker--active' ) );
+      }
+      activeId = id;
+      if ( id ) {
+        const el = svg.getElementById( id );
+        if ( el ) el.classList.add( 'ukm-active' );
+        svg.querySelectorAll( `.ukm-marker-group[data-rid="${ id }"]` )
+           .forEach( m => m.classList.add( 'ukm-marker--active' ) );
+      }
+    }
+
+    /* ---- Sidebar render ---- */
+    function renderSidebar() {
+      const body = panel.querySelector( '.ukm-panel__body' );
+
+      /* Gather every project across all regions (sorted by region name) */
+      const allProjects = [];
+      Object.keys( data )
+        .sort( ( a, b ) => ( data[a].name || a ).localeCompare( data[b].name || b ) )
+        .forEach( id => {
+          const info     = data[ id ];
+          const projects = info.projects || [];
+          projects.forEach( p => {
+            allProjects.push( Object.assign( {}, p, { _rid: id, _rname: info.name || id } ) );
+          } );
+        } );
+
+      /* Filter by selected region */
+      let filtered = activeId ? allProjects.filter( p => p._rid === activeId ) : allProjects;
+
+      /* Filter by search term */
+      if ( searchTerm.trim() ) {
+        const term = searchTerm.toLowerCase();
+        filtered = filtered.filter( p =>
+          ( p.title       || '' ).toLowerCase().includes( term ) ||
+          ( p.description || '' ).toLowerCase().includes( term ) ||
+          ( p.location    || '' ).toLowerCase().includes( term ) ||
+          ( p._rname      || '' ).toLowerCase().includes( term )
+        );
+      }
+
+      /* Header */
+      let html = '<div class="ukm-panel__header">';
+      if ( activeId ) {
+        const rname = ( data[ activeId ] && data[ activeId ].name ) || activeId;
+        html += '<span class="ukm-panel__heading">' + escHtml( rname ) + '</span>'
+              + '<button class="ukm-panel__all-btn" aria-label="Show all projects">\u2190 All</button>';
+      } else {
+        html += '<span class="ukm-panel__heading">All Projects</span>'
+              + '<span class="ukm-panel__total">' + allProjects.length + '</span>';
+      }
+      html += '</div>';
+
+      /* Cards */
+      if ( !filtered.length ) {
+        html += '<p class="ukm-panel__empty">'
+              + ( searchTerm.trim()
+                  ? 'No results for \u201c' + escHtml( searchTerm ) + '\u201d.'
+                  : activeId ? 'No projects in this region.' : 'No projects added yet.' )
+              + '</p>';
+      } else {
+        html += '<div class="ukm-panel__projects">';
+        filtered.forEach( p => { html += buildCard( p, !activeId ); } );
+        html += '</div>';
+      }
+
+      body.innerHTML = html;
+
+      const allBtn = body.querySelector( '.ukm-panel__all-btn' );
+      if ( allBtn ) {
+        allBtn.addEventListener( 'click', () => {
+          setActive( null );
+          renderSidebar();
+        } );
+      }
+    }
+  }
+
+  /* -------------------------------------------------------
+     SVG marker placement
+     Shows a teardrop pin (or custom icon) with project count
+     for every region that has ≥1 project with a location.
+  ------------------------------------------------------- */
+  function placeMarkers( svg, data, markerIcon, markerColor, onActivate ) {
+    let grp = svg.getElementById( 'ukm-markers' );
+    if ( !grp ) {
+      grp = document.createElementNS( SVG_NS, 'g' );
+      grp.id = 'ukm-markers';
+      svg.appendChild( grp );
+    }
+
+    Object.keys( data ).forEach( id => {
+      const info     = data[ id ];
+      const projects = info.projects || [];
+
+      /* Only place a marker if at least one project has a location text */
+      if ( !projects.some( p => p.location && p.location.trim() ) ) return;
+
+      const path = svg.getElementById( id );
+      if ( !path ) return;
+
+      const bbox  = path.getBBox();
+      const cx    = bbox.x + bbox.width  / 2;
+      const cy    = bbox.y + bbox.height / 2;
+      const count = projects.length;
+      const label = ( info.name || id ) + ' \u2014 ' + count + ' project' + ( count !== 1 ? 's' : '' );
+
+      const group = document.createElementNS( SVG_NS, 'g' );
+      group.setAttribute( 'class', 'ukm-marker-group' );
+      group.setAttribute( 'transform', 'translate(' + cx + ',' + cy + ')' );
+      group.setAttribute( 'data-rid', id );
+      group.setAttribute( 'tabindex', '0' );
+      group.setAttribute( 'role', 'button' );
+      group.setAttribute( 'aria-label', label );
+
+      if ( markerIcon ) {
+        /* ---- Custom icon + count badge ---- */
+        const img = document.createElementNS( SVG_NS, 'image' );
+        img.setAttribute( 'href', markerIcon );
+        img.setAttribute( 'x',  '-16' );
+        img.setAttribute( 'y',  '-32' );
+        img.setAttribute( 'width',  '32' );
+        img.setAttribute( 'height', '32' );
+        img.setAttribute( 'class', 'ukm-marker__icon' );
+        group.appendChild( img );
+
+        const badge = document.createElementNS( SVG_NS, 'circle' );
+        badge.setAttribute( 'cx', '14' );
+        badge.setAttribute( 'cy', '-26' );
+        badge.setAttribute( 'r',  '9' );
+        badge.setAttribute( 'class', 'ukm-marker__badge' );
+        group.appendChild( badge );
+
+        const badgeText = document.createElementNS( SVG_NS, 'text' );
+        badgeText.setAttribute( 'x', '14' );
+        badgeText.setAttribute( 'y', '-26' );
+        badgeText.setAttribute( 'text-anchor', 'middle' );
+        badgeText.setAttribute( 'dominant-baseline', 'middle' );
+        badgeText.setAttribute( 'class', 'ukm-marker__badge-text' );
+        badgeText.textContent = count > 99 ? '99+' : String( count );
+        group.appendChild( badgeText );
+      } else {
+        /* ---- Default teardrop pin ---- */
+        /* Pin shape: rounded top centred at (0,-14), tip at (0,14) */
+        const pin = document.createElementNS( SVG_NS, 'path' );
+        pin.setAttribute( 'd', 'M0,14 C0,14 -16,-2 -16,-12 A16,16 0 1,1 16,-12 C16,-2 0,14 0,14 Z' );
+        pin.setAttribute( 'class', 'ukm-marker__pin' );
+        pin.style.fill = markerColor;
+        group.appendChild( pin );
+
+        /* Drop shadow ring (pure CSS class, no inline fill) */
+        const countText = document.createElementNS( SVG_NS, 'text' );
+        countText.setAttribute( 'x', '0' );
+        countText.setAttribute( 'y', '-12' );
+        countText.setAttribute( 'text-anchor', 'middle' );
+        countText.setAttribute( 'dominant-baseline', 'middle' );
+        countText.setAttribute( 'class', 'ukm-marker__count' );
+        countText.textContent = count > 99 ? '99+' : String( count );
+        group.appendChild( countText );
+      }
+
+      /* Events */
+      group.addEventListener( 'click', e => { e.stopPropagation(); onActivate( id ); } );
+      group.addEventListener( 'keydown', e => {
+        if ( e.key === 'Enter' || e.key === ' ' ) { e.preventDefault(); e.stopPropagation(); onActivate( id ); }
+      } );
+      group.addEventListener( 'mouseenter', e => showTooltip( e, label ) );
+      group.addEventListener( 'mousemove',  e => moveTooltip( e ) );
+      group.addEventListener( 'mouseleave', hideTooltip );
+
+      grp.appendChild( group );
+    } );
+  }
+
+  /* -------------------------------------------------------
+     Project card HTML
+  ------------------------------------------------------- */
+  function buildCard( p, showRegion ) {
+    return '<article class="ukm-project-card">'
+      + ( showRegion && p._rname
+          ? '<div class="ukm-project-card__region">' + escHtml( p._rname ) + '</div>'
+          : '' )
+      + ( p.image
+          ? '<img class="ukm-project-card__image" src="' + escAttr( p.image ) + '" alt="' + escAttr( p.title || '' ) + '">'
+          : '' )
+      + '<div class="ukm-project-card__body">'
+      + ( p.title       ? '<div class="ukm-project-card__title">'    + escHtml( p.title )       + '</div>' : '' )
+      + ( p.location    ? '<div class="ukm-project-card__location">&#x1F4CD; ' + escHtml( p.location ) + '</div>' : '' )
+      + ( p.description ? '<div class="ukm-project-card__desc">'     + escHtml( p.description ) + '</div>' : '' )
+      + ( p.url
+          ? '<a class="ukm-project-card__link" href="' + escAttr( p.url ) + '" target="_blank" rel="noopener noreferrer">View Website</a>'
+          : '' )
+      + '</div></article>';
   }
 
   /* -------------------------------------------------------
@@ -71,193 +301,17 @@
     tooltip.classList.add( 'ukm-tooltip--visible' );
     moveTooltip( e );
   }
-
   function moveTooltip( e ) {
-    const gap = 14;
     tooltip.style.left = ( e.clientX - tooltip.offsetWidth / 2 ) + 'px';
-    tooltip.style.top  = ( e.clientY - tooltip.offsetHeight - gap ) + 'px';
+    tooltip.style.top  = ( e.clientY - tooltip.offsetHeight - 14 ) + 'px';
   }
-
   function hideTooltip() {
     tooltip.classList.remove( 'ukm-tooltip--visible' );
   }
 
   /* -------------------------------------------------------
-     Modal
-  ------------------------------------------------------- */
-  function openModal( id, info ) {
-    closeModal(); // ensure clean state
-
-    const overlay = createEl( 'div', 'ukm-modal-overlay' );
-    const modal   = createEl( 'div', 'ukm-modal' );
-    overlay.setAttribute( 'role', 'dialog' );
-    overlay.setAttribute( 'aria-modal', 'true' );
-    overlay.setAttribute( 'aria-label', info.name );
-
-    modal.innerHTML = buildModalHTML( id, info );
-    overlay.appendChild( modal );
-    document.body.appendChild( overlay );
-
-    /* animate in */
-    requestAnimationFrame( () => overlay.classList.add( 'ukm-modal--open' ) );
-
-    /* highlight active region */
-    setActiveRegion( id );
-
-    /* close handlers */
-    overlay.addEventListener( 'click', e => {
-      if ( e.target === overlay ) closeModal();
-    } );
-    modal.querySelector( '.ukm-modal__close' ).addEventListener( 'click', closeModal );
-
-    /* focus trap */
-    modal.querySelector( '.ukm-modal__close' ).focus();
-
-    document.addEventListener( 'keydown', onEsc );
-    overlay._ukmCleanup = () => document.removeEventListener( 'keydown', onEsc );
-
-    function onEsc( e ) {
-      if ( e.key === 'Escape' ) closeModal();
-    }
-
-    overlay._ukmId = id;
-    document.body._ukmModal = overlay;
-  }
-
-  function closeModal() {
-    const overlay = document.body._ukmModal;
-    if ( !overlay ) return;
-
-    if ( overlay._ukmCleanup ) overlay._ukmCleanup();
-
-    overlay.classList.remove( 'ukm-modal--open' );
-    setActiveRegion( null );
-
-    overlay.addEventListener( 'transitionend', () => overlay.remove(), { once: true } );
-    document.body._ukmModal = null;
-  }
-
-  function buildModalHTML( id, info ) {
-    const stats    = buildStatsHTML( info.stats );
-    const linkHref = info.link  || '';
-    const linkText = info.link_label || 'Learn more';
-    const desc     = info.description || '';
-
-    return `
-      <button class="ukm-modal__close" aria-label="Close">&times;</button>
-      <p class="ukm-modal__subtitle">United Kingdom</p>
-      <h2 class="ukm-modal__title">${ escHtml( info.name || id ) }</h2>
-      ${ desc ? `<p class="ukm-modal__body">${ escHtml( desc ) }</p>` : '' }
-      ${ stats }
-      ${ linkHref ? `<a class="ukm-modal__link" href="${ escAttr( linkHref ) }" target="_blank" rel="noopener noreferrer">${ escHtml( linkText ) }</a>` : '' }
-    `;
-  }
-
-  function buildStatsHTML( stats ) {
-    if ( !stats || !Object.keys( stats ).length ) return '';
-    const items = Object.entries( stats ).map( ( [ label, value ] ) => `
-      <div class="ukm-stat">
-        <div class="ukm-stat__label">${ escHtml( label ) }</div>
-        <div class="ukm-stat__value">${ escHtml( String( value ) ) }</div>
-      </div>` ).join( '' );
-    return `<div class="ukm-modal__stats">${ items }</div>`;
-  }
-
-  /* -------------------------------------------------------
-     Popover
-  ------------------------------------------------------- */
-  function togglePopover( wrap, path, id, info ) {
-    /* close any existing popover */
-    const existing = wrap.querySelector( '.ukm-popover' );
-    if ( existing ) {
-      if ( existing.dataset.region === id ) {
-        dismissPopover( existing );
-        setActiveRegion( null );
-        return;
-      }
-      dismissPopover( existing );
-    }
-
-    setActiveRegion( id );
-
-    const pop = createEl( 'div', 'ukm-popover' );
-    pop.dataset.region = id;
-    pop.innerHTML = `
-      <div class="ukm-popover__title">${ escHtml( info.name || id ) }</div>
-      <div class="ukm-popover__text">${ escHtml( info.description || '' ) }</div>
-    `;
-
-    /* position relative to path bounding box within the wrap */
-    wrap.style.position = 'relative';
-    wrap.appendChild( pop );
-    positionPopover( pop, path, wrap );
-
-    requestAnimationFrame( () => pop.classList.add( 'ukm-popover--visible' ) );
-
-    /* dismiss on outside click */
-    setTimeout( () => {
-      document.addEventListener( 'click', function handler( e ) {
-        if ( !pop.contains( e.target ) && e.target !== path ) {
-          dismissPopover( pop );
-          setActiveRegion( null );
-          document.removeEventListener( 'click', handler );
-        }
-      } );
-    }, 0 );
-  }
-
-  function positionPopover( pop, path, wrap ) {
-    const pRect = path.getBoundingClientRect();
-    const wRect = wrap.getBoundingClientRect();
-    const popW  = 220;
-    let left    = pRect.left - wRect.left + pRect.width / 2 - popW / 2;
-    let top     = pRect.top  - wRect.top  - pop.offsetHeight - 8;
-
-    /* keep within wrap bounds */
-    left = Math.max( 0, Math.min( left, wRect.width - popW ) );
-    if ( top < 0 ) top = pRect.bottom - wRect.top + 8;
-
-    pop.style.left = left + 'px';
-    pop.style.top  = top  + 'px';
-  }
-
-  function dismissPopover( pop ) {
-    pop.classList.remove( 'ukm-popover--visible' );
-    pop.addEventListener( 'transitionend', () => pop.remove(), { once: true } );
-  }
-
-  /* -------------------------------------------------------
      Helpers
   ------------------------------------------------------- */
-  function setActiveRegion( id ) {
-    if ( activeRegion ) {
-      document.querySelectorAll( `[data-region="${ activeRegion }"]` )
-        .forEach( el => el.classList.remove( 'ukm-active' ) );
-    }
-    activeRegion = id;
-    if ( id ) {
-      document.querySelectorAll( `[data-region="${ id }"]` )
-        .forEach( el => el.classList.add( 'ukm-active' ) );
-    }
-  }
-
-  function getRegionData( id ) {
-    if ( typeof ukmData !== 'undefined' && ukmData.regions && ukmData.regions[ id ] ) {
-      return ukmData.regions[ id ];
-    }
-    return { name: toTitle( id ) };
-  }
-
-  function toTitle( slug ) {
-    return slug.replace( /-/g, ' ' ).replace( /\b\w/g, c => c.toUpperCase() );
-  }
-
-  function createEl( tag, cls ) {
-    const el = document.createElement( tag );
-    if ( cls ) el.className = cls;
-    return el;
-  }
-
   function escHtml( str ) {
     return String( str )
       .replace( /&/g,  '&amp;' )
@@ -266,7 +320,6 @@
       .replace( /"/g,  '&quot;' )
       .replace( /'/g,  '&#039;' );
   }
-
   function escAttr( str ) {
     return encodeURI( String( str ) );
   }
