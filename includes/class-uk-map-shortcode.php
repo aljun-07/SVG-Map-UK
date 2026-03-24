@@ -73,6 +73,7 @@ class UK_Map_Shortcode {
                 'regions'     => $regions,
                 'markerIcon'  => $settings['marker_icon']  ?? '',
                 'markerColor' => $settings['marker_color'] ?? '#e74c3c',
+                'markerSize'  => (int) ( $settings['marker_size'] ?? 32 ),
             ]
         );
 

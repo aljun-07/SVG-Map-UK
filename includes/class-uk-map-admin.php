@@ -18,21 +18,30 @@ class UK_Map_Admin {
        Hooks registration
     ------------------------------------------------------- */
     public static function register_menu(): void {
-        add_options_page(
+        add_menu_page(
             __( 'UK Interactive Map', 'uk-interactive-map' ),
             __( 'UK Map', 'uk-interactive-map' ),
             'manage_options',
             self::MENU_SLUG,
-            [ __CLASS__, 'render_page' ]
+            [ __CLASS__, 'render_page' ],
+            'dashicons-location-alt',
+            58
         );
     }
 
     public static function enqueue_admin_scripts( string $hook ): void {
-        if ( $hook !== 'settings_page_' . self::MENU_SLUG ) {
+        if ( $hook !== 'toplevel_page_' . self::MENU_SLUG ) {
             return;
         }
 
         wp_enqueue_media();
+
+        wp_enqueue_style(
+            'uk-interactive-map-admin',
+            UKM_PLUGIN_URL . 'assets/css/uk-map.css',
+            [],
+            UKM_VERSION
+        );
 
         $saved    = get_option( self::OPTION_KEY, [] );
         $regions  = UK_Map_Data::merge_with_defaults( is_array( $saved ) ? $saved : [] );
@@ -48,6 +57,7 @@ class UK_Map_Admin {
                 'settings'    => [
                     'marker_icon'  => $settings['marker_icon']  ?? '',
                     'marker_color' => $settings['marker_color'] ?? '#e74c3c',
+                    'marker_size'  => (int) ( $settings['marker_size']  ?? 32 ),
                 ],
                 'strings'     => [
                     'saved'       => __( 'Saved!', 'uk-interactive-map' ),
@@ -77,9 +87,11 @@ class UK_Map_Admin {
             wp_send_json_error( [ 'message' => 'Invalid data.' ], 400 );
         }
 
+        $size = (int) ( $input['marker_size'] ?? 32 );
         $clean = [
             'marker_icon'  => esc_url_raw( $input['marker_icon']  ?? '' ),
             'marker_color' => self::sanitize_color( $input['marker_color'] ?? '' ) ?: '#e74c3c',
+            'marker_size'  => max( 8, min( 128, $size ) ),
         ];
 
         update_option( 'ukm_settings', $clean );
@@ -157,7 +169,7 @@ class UK_Map_Admin {
             </p>
 
             <!-- Global map settings (marker icon + color) -->
-            <div id="ukm-global-settings" style="background:#fff;border:1px solid #c3c4c7;border-radius:4px;padding:16px 20px;margin-bottom:20px;max-width:700px;">
+            <div id="ukm-global-settings" style="background:#fff;border:1px solid #c3c4c7;border-radius:4px;padding:16px 20px;margin-bottom:20px;max-width:100%;">
                 <h2 style="margin-top:0;font-size:15px;"><?php esc_html_e( 'Marker Settings', 'uk-interactive-map' ); ?></h2>
                 <table class="form-table" role="presentation" style="margin-top:0;">
                     <tr>
@@ -169,9 +181,18 @@ class UK_Map_Admin {
                                 <button type="button" id="ukm-gs-icon-remove" class="button" style="display:none;"><?php esc_html_e( 'Remove', 'uk-interactive-map' ); ?></button>
                             </div>
                             <div id="ukm-gs-icon-preview" style="display:none;margin-top:8px;">
-                                <img src="" style="max-width:64px;max-height:64px;object-fit:contain;border:1px solid #ddd;border-radius:4px;padding:4px;">
+                                <a id="ukm-gs-icon-link" href="#" target="_blank" rel="noopener noreferrer" title="<?php esc_attr_e( 'Click to open image in new tab', 'uk-interactive-map' ); ?>" style="display:inline-block;">
+                                    <img src="" style="max-width:64px;max-height:64px;object-fit:contain;border:1px solid #ddd;border-radius:4px;padding:4px;cursor:pointer;">
+                                </a>
                             </div>
-                            <p class="description"><?php esc_html_e( 'Replaces the default teardrop pin. Recommended: 32×32 px PNG or SVG.', 'uk-interactive-map' ); ?></p>
+                            <p class="description"><?php esc_html_e( 'Replaces the default teardrop pin. Click the preview to open the image. Recommended: 32×32 px PNG or SVG.', 'uk-interactive-map' ); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row" style="padding-left:0;"><label for="ukm-gs-size"><?php esc_html_e( 'Marker Size (px)', 'uk-interactive-map' ); ?></label></th>
+                        <td>
+                            <input type="number" id="ukm-gs-size" min="8" max="128" step="1" value="32" style="width:80px;">
+                            <p class="description"><?php esc_html_e( 'Visual size of the map marker in pixels (8–128). Default: 32.', 'uk-interactive-map' ); ?></p>
                         </td>
                     </tr>
                     <tr>
@@ -252,41 +273,42 @@ class UK_Map_Admin {
 
             /* ---- global marker settings ---- */
             (function() {
-                var gs       = ukmAdmin.settings || {};
-                var iconInp  = document.getElementById('ukm-gs-icon');
-                var colorInp = document.getElementById('ukm-gs-color');
-                var preview  = document.getElementById('ukm-gs-icon-preview');
-                var removeBtn= document.getElementById('ukm-gs-icon-remove');
-                var saveBtn  = document.getElementById('ukm-gs-save');
-                var status   = document.getElementById('ukm-gs-status');
-                var gsMedia  = null;
+                var gs        = ukmAdmin.settings || {};
+                var iconInp   = document.getElementById('ukm-gs-icon');
+                var colorInp  = document.getElementById('ukm-gs-color');
+                var sizeInp   = document.getElementById('ukm-gs-size');
+                var preview   = document.getElementById('ukm-gs-icon-preview');
+                var iconLink  = document.getElementById('ukm-gs-icon-link');
+                var removeBtn = document.getElementById('ukm-gs-icon-remove');
+                var saveBtn   = document.getElementById('ukm-gs-save');
+                var status    = document.getElementById('ukm-gs-status');
+                var gsMedia   = null;
+
+                function updateIconPreview( url ) {
+                    if ( url ) {
+                        preview.querySelector('img').src = url;
+                        iconLink.href               = url;
+                        preview.style.display       = '';
+                        removeBtn.style.display     = '';
+                    } else {
+                        preview.style.display       = 'none';
+                        removeBtn.style.display     = 'none';
+                    }
+                }
 
                 /* populate from saved */
                 iconInp.value  = gs.marker_icon  || '';
                 colorInp.value = gs.marker_color || '#e74c3c';
-                if ( gs.marker_icon ) {
-                    preview.querySelector('img').src = gs.marker_icon;
-                    preview.style.display  = '';
-                    removeBtn.style.display = '';
-                }
+                sizeInp.value  = gs.marker_size  || 32;
+                updateIconPreview( gs.marker_icon || '' );
 
                 /* icon URL input live preview */
-                iconInp.addEventListener('input', function() {
-                    if ( this.value ) {
-                        preview.querySelector('img').src = this.value;
-                        preview.style.display   = '';
-                        removeBtn.style.display = '';
-                    } else {
-                        preview.style.display   = 'none';
-                        removeBtn.style.display = 'none';
-                    }
-                });
+                iconInp.addEventListener('input', function() { updateIconPreview( this.value ); });
 
                 /* remove icon */
                 removeBtn.addEventListener('click', function() {
-                    iconInp.value           = '';
-                    preview.style.display   = 'none';
-                    removeBtn.style.display = 'none';
+                    iconInp.value = '';
+                    updateIconPreview('');
                 });
 
                 /* media picker for icon */
@@ -310,7 +332,7 @@ class UK_Map_Admin {
                     saveBtn.disabled    = true;
                     status.textContent  = s.saving;
 
-                    var data = { marker_icon: iconInp.value, marker_color: colorInp.value };
+                    var data = { marker_icon: iconInp.value, marker_color: colorInp.value, marker_size: parseInt(sizeInp.value, 10) || 32 };
                     var body = new URLSearchParams({ action: 'ukm_save_settings', nonce: ukmAdmin.nonce, data: JSON.stringify(data) });
 
                     fetch( ukmAdmin.ajaxUrl, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString() })

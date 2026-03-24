@@ -32,9 +32,158 @@
     const data        = ( typeof ukmData !== 'undefined' && ukmData.regions ) ? ukmData.regions : {};
     const markerIcon  = ( typeof ukmData !== 'undefined' ) ? ( ukmData.markerIcon  || '' ) : '';
     const markerColor = ( typeof ukmData !== 'undefined' ) ? ( ukmData.markerColor || '#e74c3c' ) : '#e74c3c';
+    const markerSize  = ( typeof ukmData !== 'undefined' ) ? ( ukmData.markerSize  || 32 )       : 32;
 
     let activeId   = null;
     let searchTerm = '';
+
+    /* ---- Zoom + Pan state ---- */
+    const mapArea = wrap.querySelector( '.ukm-map-area' );
+    const origVB  = svg.getAttribute( 'viewBox' ) || '0 0 1000 1000';
+    const vbParts = origVB.split( /[\s,]+/ ).map( Number );
+
+    /* Live viewBox state — updated by both zoom and drag */
+    let vbX = vbParts[0], vbY = vbParts[1], vbW = vbParts[2], vbH = vbParts[3];
+    let zoomLevel = 1;
+    const ZOOM_STEP = 1.35;
+    const MAX_ZOOM  = 8;
+
+    function setViewBox( x, y, w, h ) {
+      vbX = x; vbY = y; vbW = w; vbH = h;
+      svg.setAttribute( 'viewBox', `${ x } ${ y } ${ w } ${ h }` );
+    }
+
+    /* ---- Zoom controls ---- */
+    const zoomBar = document.createElement( 'div' );
+    zoomBar.className = 'ukm-zoom-bar';
+    zoomBar.innerHTML =
+      '<button class="ukm-zoom-btn" data-z="in"  aria-label="Zoom in">+</button>'
+      + '<button class="ukm-zoom-btn" data-z="out" aria-label="Zoom out">&minus;</button>'
+      + '<button class="ukm-zoom-btn" data-z="reset" aria-label="Reset zoom" title="Reset">&#8635;</button>';
+    mapArea.appendChild( zoomBar );
+
+    zoomBar.addEventListener( 'click', e => {
+      const btn = e.target.closest( '[data-z]' );
+      if ( !btn ) return;
+      const action = btn.dataset.z;
+      if ( action === 'reset' ) {
+        zoomLevel = 1;
+        setViewBox( vbParts[0], vbParts[1], vbParts[2], vbParts[3] );
+      } else if ( action === 'in' && zoomLevel < MAX_ZOOM ) {
+        zoomLevel *= ZOOM_STEP;
+        applyZoom();
+      } else if ( action === 'out' && zoomLevel > 1 ) {
+        zoomLevel /= ZOOM_STEP;
+        if ( zoomLevel < 1 ) zoomLevel = 1;
+        applyZoom();
+      }
+      updateZoomBtn();
+    } );
+
+    /* Scroll-wheel zoom (towards cursor position) */
+    svg.addEventListener( 'wheel', e => {
+      e.preventDefault();
+      const rect   = svg.getBoundingClientRect();
+      /* cursor position in SVG coordinate space */
+      const mx = vbX + ( e.clientX - rect.left ) / rect.width  * vbW;
+      const my = vbY + ( e.clientY - rect.top  ) / rect.height * vbH;
+
+      if ( e.deltaY < 0 && zoomLevel < MAX_ZOOM ) {
+        zoomLevel *= ZOOM_STEP;
+      } else if ( e.deltaY > 0 && zoomLevel > 1 ) {
+        zoomLevel /= ZOOM_STEP;
+        if ( zoomLevel < 1 ) zoomLevel = 1;
+      } else {
+        return;
+      }
+      /* zoom towards cursor: keep mx/my under the cursor */
+      const newW = vbParts[2] / zoomLevel;
+      const newH = vbParts[3] / zoomLevel;
+      const rx   = ( e.clientX - rect.left ) / rect.width;
+      const ry   = ( e.clientY - rect.top  ) / rect.height;
+      setViewBox( mx - rx * newW, my - ry * newH, newW, newH );
+      updateZoomBtn();
+    }, { passive: false } );
+
+    function applyZoom() {
+      /* zoom keeping current visible centre */
+      const cx = vbX + vbW / 2;
+      const cy = vbY + vbH / 2;
+      const w  = vbParts[2] / zoomLevel;
+      const h  = vbParts[3] / zoomLevel;
+      setViewBox( cx - w / 2, cy - h / 2, w, h );
+    }
+
+    function updateZoomBtn() {
+      zoomBar.querySelector( '[data-z="reset"]' ).style.opacity = zoomLevel > 1 ? '1' : '0.4';
+    }
+
+    /* ---- Drag / pan ---- */
+    let isDragging = false;
+    let dragMoved  = false;
+    let dragStart  = null;   /* { x, y } in client px */
+    let dragOrigX  = 0, dragOrigY = 0;
+
+    svg.style.cursor = 'grab';
+
+    svg.addEventListener( 'mousedown', e => {
+      if ( e.button !== 0 ) return;
+      isDragging = true;
+      dragMoved  = false;
+      dragStart  = { x: e.clientX, y: e.clientY };
+      dragOrigX  = vbX;
+      dragOrigY  = vbY;
+      svg.style.cursor = 'grabbing';
+      e.preventDefault();   /* prevent text selection */
+    } );
+
+    document.addEventListener( 'mousemove', e => {
+      if ( !isDragging ) return;
+      const dx = e.clientX - dragStart.x;
+      const dy = e.clientY - dragStart.y;
+      if ( !dragMoved && ( Math.abs( dx ) > 3 || Math.abs( dy ) > 3 ) ) dragMoved = true;
+      if ( !dragMoved ) return;
+      const ratio = vbW / svg.getBoundingClientRect().width;
+      setViewBox( dragOrigX - dx * ratio, dragOrigY - dy * ratio, vbW, vbH );
+    } );
+
+    document.addEventListener( 'mouseup', () => {
+      if ( !isDragging ) return;
+      isDragging = false;
+      svg.style.cursor = 'grab';
+      /* Reset dragMoved after click fires (click fires before timeout) */
+      setTimeout( () => { dragMoved = false; }, 0 );
+    } );
+
+    /* Touch pan */
+    svg.addEventListener( 'touchstart', e => {
+      if ( e.touches.length !== 1 ) return;
+      const t = e.touches[0];
+      isDragging = true;
+      dragMoved  = false;
+      dragStart  = { x: t.clientX, y: t.clientY };
+      dragOrigX  = vbX;
+      dragOrigY  = vbY;
+    }, { passive: true } );
+
+    svg.addEventListener( 'touchmove', e => {
+      if ( !isDragging || e.touches.length !== 1 ) return;
+      const t  = e.touches[0];
+      const dx = t.clientX - dragStart.x;
+      const dy = t.clientY - dragStart.y;
+      if ( !dragMoved && ( Math.abs( dx ) > 3 || Math.abs( dy ) > 3 ) ) {
+        dragMoved = true;
+        e.preventDefault();   /* only prevent scroll once confirmed drag */
+      }
+      if ( !dragMoved ) return;
+      const ratio = vbW / svg.getBoundingClientRect().width;
+      setViewBox( dragOrigX - dx * ratio, dragOrigY - dy * ratio, vbW, vbH );
+    }, { passive: false } );
+
+    svg.addEventListener( 'touchend', () => {
+      isDragging = false;
+      setTimeout( () => { dragMoved = false; }, 0 );
+    } );
 
     /* ---- Build sidebar skeleton (permanent) ---- */
     panel.innerHTML =
@@ -73,7 +222,7 @@
     } );
 
     /* ---- Place SVG markers ---- */
-    placeMarkers( svg, data, markerIcon, markerColor, handleActivate );
+    placeMarkers( svg, data, markerIcon, markerColor, markerSize, handleActivate );
 
     /* ---- Deselect when clicking outside the widget ---- */
     document.addEventListener( 'click', e => {
@@ -87,7 +236,7 @@
     ===================================================== */
 
     function handleActivate( id ) {
-      /* Toggle: clicking the active region deselects it */
+      if ( dragMoved ) return;   /* was a drag, not a click — ignore */
       setActive( id === activeId ? null : id );
       renderSidebar();
     }
@@ -180,7 +329,9 @@
      Shows a teardrop pin (or custom icon) with project count
      for every region that has ≥1 project with a location.
   ------------------------------------------------------- */
-  function placeMarkers( svg, data, markerIcon, markerColor, onActivate ) {
+  function placeMarkers( svg, data, markerIcon, markerColor, markerSize, onActivate ) {
+    /* markerSize is in "px equivalent" units; base pin is drawn at 32 SVG-unit scale */
+    const scale = ( markerSize || 32 ) / 32;
     let grp = svg.getElementById( 'ukm-markers' );
     if ( !grp ) {
       grp = document.createElementNS( SVG_NS, 'g' );
@@ -206,7 +357,7 @@
 
       const group = document.createElementNS( SVG_NS, 'g' );
       group.setAttribute( 'class', 'ukm-marker-group' );
-      group.setAttribute( 'transform', 'translate(' + cx + ',' + cy + ')' );
+      group.setAttribute( 'transform', 'translate(' + cx + ',' + cy + ') scale(' + scale + ')' );
       group.setAttribute( 'data-rid', id );
       group.setAttribute( 'tabindex', '0' );
       group.setAttribute( 'role', 'button' );
@@ -287,7 +438,7 @@
       + ( p.location    ? '<div class="ukm-project-card__location">&#x1F4CD; ' + escHtml( p.location ) + '</div>' : '' )
       + ( p.description ? '<div class="ukm-project-card__desc">'     + escHtml( p.description ) + '</div>' : '' )
       + ( p.url
-          ? '<a class="ukm-project-card__link" href="' + escAttr( p.url ) + '" target="_blank" rel="noopener noreferrer">View Website</a>'
+          ? '<a class="ukm-project-card__link" href="' + escAttr( p.url ) + '" target="_blank" rel="noopener noreferrer">View Project</a>'
           : '' )
       + '</div></article>';
   }
