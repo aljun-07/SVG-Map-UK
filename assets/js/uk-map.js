@@ -32,7 +32,8 @@
     const data        = ( typeof ukmData !== 'undefined' && ukmData.regions ) ? ukmData.regions : {};
     const markerIcon  = ( typeof ukmData !== 'undefined' ) ? ( ukmData.markerIcon  || '' ) : '';
     const markerColor = ( typeof ukmData !== 'undefined' ) ? ( ukmData.markerColor || '#e74c3c' ) : '#e74c3c';
-    const markerSize  = ( typeof ukmData !== 'undefined' ) ? ( ukmData.markerSize  || 32 )       : 32;
+    const markerSize     = ( typeof ukmData !== 'undefined' ) ? ( ukmData.markerSize     || 32 )        : 32;
+    const selectedColor  = ( typeof ukmData !== 'undefined' ) ? ( ukmData.selectedColor  || '#2271b1' )  : '#2271b1';
 
     let activeId   = null;
     let searchTerm = '';
@@ -201,19 +202,31 @@
 
     /* ---- Bind region paths ---- */
     svg.querySelectorAll( '#features path' ).forEach( path => {
-      const id   = path.id;
+      const id        = path.id;
       if ( !id ) return;
-      const info = data[ id ] || { name: path.getAttribute( 'name' ) || id, projects: [] };
+      const info      = data[ id ] || { name: path.getAttribute( 'name' ) || id, projects: [] };
+      const baseFill  = info.color       || '';
+      const hoverFill = info.hover_color || '';
 
-      if ( info.color ) path.style.fill = info.color;
+      if ( baseFill ) path.style.fill = baseFill;
 
       path.setAttribute( 'tabindex', '0' );
       path.setAttribute( 'role', 'button' );
       path.setAttribute( 'aria-label', info.name || id );
 
-      path.addEventListener( 'mouseenter', e => showTooltip( e, info.name || id ) );
-      path.addEventListener( 'mousemove',  e => moveTooltip( e ) );
-      path.addEventListener( 'mouseleave', hideTooltip );
+      path.addEventListener( 'mouseenter', e => {
+        showTooltip( e, info.name || id );
+        if ( !path.classList.contains( 'ukm-active' ) ) {
+          path.style.fill = hoverFill || baseFill || '';
+        }
+      } );
+      path.addEventListener( 'mousemove', e => moveTooltip( e ) );
+      path.addEventListener( 'mouseleave', () => {
+        hideTooltip();
+        if ( !path.classList.contains( 'ukm-active' ) ) {
+          path.style.fill = baseFill;
+        }
+      } );
 
       path.addEventListener( 'click', () => handleActivate( id ) );
       path.addEventListener( 'keydown', e => {
@@ -243,15 +256,24 @@
 
     function setActive( id ) {
       if ( activeId ) {
-        const prev = svg.getElementById( activeId );
-        if ( prev ) prev.classList.remove( 'ukm-active' );
+        const prev     = svg.getElementById( activeId );
+        const prevInfo = data[ activeId ];
+        if ( prev ) {
+          prev.classList.remove( 'ukm-active' );
+          /* restore base fill when deselecting */
+          prev.style.fill = ( prevInfo && prevInfo.color ) ? prevInfo.color : '';
+        }
         svg.querySelectorAll( `.ukm-marker-group[data-rid="${ activeId }"]` )
            .forEach( m => m.classList.remove( 'ukm-marker--active' ) );
       }
       activeId = id;
       if ( id ) {
         const el = svg.getElementById( id );
-        if ( el ) el.classList.add( 'ukm-active' );
+        if ( el ) {
+          el.classList.add( 'ukm-active' );
+          /* apply selected fill color */
+          el.style.fill = selectedColor;
+        }
         svg.querySelectorAll( `.ukm-marker-group[data-rid="${ id }"]` )
            .forEach( m => m.classList.add( 'ukm-marker--active' ) );
       }

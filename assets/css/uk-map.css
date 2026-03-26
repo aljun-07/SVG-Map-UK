@@ -97,13 +97,15 @@
 
 #features path:hover,
 #features path:focus-visible {
-    opacity: 0.72;
+    /* fill handled via JS (hover_color); this is a subtle fallback for regions without one */
+    filter: brightness(0.88);
 }
 
 #features path.ukm-active {
-    opacity: 0.88;
-    stroke: #1a3a5c !important;
-    stroke-width: 2 !important;
+    /* fill set via JS (selectedColor); stroke gives a clear selection border */
+    stroke: #fff !important;
+    stroke-width: 1.5 !important;
+    filter: none;
 }
 
 /* =========================================================

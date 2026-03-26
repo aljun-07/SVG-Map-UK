@@ -70,10 +70,11 @@ class UK_Map_Shortcode {
             'uk-interactive-map',
             'ukmData',
             [
-                'regions'     => $regions,
-                'markerIcon'  => $settings['marker_icon']  ?? '',
-                'markerColor' => $settings['marker_color'] ?? '#e74c3c',
-                'markerSize'  => (int) ( $settings['marker_size'] ?? 32 ),
+                'regions'       => $regions,
+                'markerIcon'    => $settings['marker_icon']    ?? '',
+                'markerColor'   => $settings['marker_color']   ?? '#e74c3c',
+                'markerSize'    => (int) ( $settings['marker_size'] ?? 32 ),
+                'selectedColor' => $settings['selected_color'] ?? '#2271b1',
             ]
         );
 

@@ -55,9 +55,10 @@ class UK_Map_Admin {
                 'nonce'       => wp_create_nonce( self::NONCE_ACT ),
                 'ajaxUrl'     => admin_url( 'admin-ajax.php' ),
                 'settings'    => [
-                    'marker_icon'  => $settings['marker_icon']  ?? '',
-                    'marker_color' => $settings['marker_color'] ?? '#e74c3c',
-                    'marker_size'  => (int) ( $settings['marker_size']  ?? 32 ),
+                    'marker_icon'    => $settings['marker_icon']    ?? '',
+                    'marker_color'   => $settings['marker_color']   ?? '#e74c3c',
+                    'marker_size'    => (int) ( $settings['marker_size'] ?? 32 ),
+                    'selected_color' => $settings['selected_color'] ?? '#2271b1',
                 ],
                 'strings'     => [
                     'saved'       => __( 'Saved!', 'uk-interactive-map' ),
@@ -89,9 +90,10 @@ class UK_Map_Admin {
 
         $size = (int) ( $input['marker_size'] ?? 32 );
         $clean = [
-            'marker_icon'  => esc_url_raw( $input['marker_icon']  ?? '' ),
-            'marker_color' => self::sanitize_color( $input['marker_color'] ?? '' ) ?: '#e74c3c',
-            'marker_size'  => max( 8, min( 128, $size ) ),
+            'marker_icon'    => esc_url_raw( $input['marker_icon']    ?? '' ),
+            'marker_color'   => self::sanitize_color( $input['marker_color']   ?? '' ) ?: '#e74c3c',
+            'marker_size'    => max( 8, min( 128, $size ) ),
+            'selected_color' => self::sanitize_color( $input['selected_color'] ?? '' ) ?: '#2271b1',
         ];
 
         update_option( 'ukm_settings', $clean );
@@ -202,6 +204,13 @@ class UK_Map_Admin {
                             <p class="description"><?php esc_html_e( 'Used for the default pin. Ignored when a custom icon is set.', 'uk-interactive-map' ); ?></p>
                         </td>
                     </tr>
+                    <tr>
+                        <th scope="row" style="padding-left:0;"><label for="ukm-gs-selected"><?php esc_html_e( 'Selected Region Color', 'uk-interactive-map' ); ?></label></th>
+                        <td>
+                            <input type="color" id="ukm-gs-selected" value="#2271b1">
+                            <p class="description"><?php esc_html_e( 'Fill color applied to a region when it is clicked/selected on the map.', 'uk-interactive-map' ); ?></p>
+                        </td>
+                    </tr>
                 </table>
                 <div style="display:flex;align-items:center;gap:12px;">
                     <button type="button" id="ukm-gs-save" class="button button-primary"><?php esc_html_e( 'Save Marker Settings', 'uk-interactive-map' ); ?></button>
@@ -274,9 +283,10 @@ class UK_Map_Admin {
             /* ---- global marker settings ---- */
             (function() {
                 var gs        = ukmAdmin.settings || {};
-                var iconInp   = document.getElementById('ukm-gs-icon');
-                var colorInp  = document.getElementById('ukm-gs-color');
-                var sizeInp   = document.getElementById('ukm-gs-size');
+                var iconInp      = document.getElementById('ukm-gs-icon');
+                var colorInp     = document.getElementById('ukm-gs-color');
+                var sizeInp      = document.getElementById('ukm-gs-size');
+                var selectedInp  = document.getElementById('ukm-gs-selected');
                 var preview   = document.getElementById('ukm-gs-icon-preview');
                 var iconLink  = document.getElementById('ukm-gs-icon-link');
                 var removeBtn = document.getElementById('ukm-gs-icon-remove');
@@ -297,9 +307,10 @@ class UK_Map_Admin {
                 }
 
                 /* populate from saved */
-                iconInp.value  = gs.marker_icon  || '';
-                colorInp.value = gs.marker_color || '#e74c3c';
-                sizeInp.value  = gs.marker_size  || 32;
+                iconInp.value     = gs.marker_icon      || '';
+                colorInp.value    = gs.marker_color     || '#e74c3c';
+                sizeInp.value     = gs.marker_size      || 32;
+                selectedInp.value = gs.selected_color   || '#2271b1';
                 updateIconPreview( gs.marker_icon || '' );
 
                 /* icon URL input live preview */
@@ -332,7 +343,7 @@ class UK_Map_Admin {
                     saveBtn.disabled    = true;
                     status.textContent  = s.saving;
 
-                    var data = { marker_icon: iconInp.value, marker_color: colorInp.value, marker_size: parseInt(sizeInp.value, 10) || 32 };
+                    var data = { marker_icon: iconInp.value, marker_color: colorInp.value, marker_size: parseInt(sizeInp.value, 10) || 32, selected_color: selectedInp.value };
                     var body = new URLSearchParams({ action: 'ukm_save_settings', nonce: ukmAdmin.nonce, data: JSON.stringify(data) });
 
                     fetch( ukmAdmin.ajaxUrl, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString() })
