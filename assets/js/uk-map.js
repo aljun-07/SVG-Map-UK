@@ -1,4 +1,3 @@
-/* global ukmData */
 ( function () {
   'use strict';
 
@@ -121,7 +120,7 @@
     const svg = wrap.querySelector( 'svg' );
     if ( !svg ) return;
 
-    const uData         = ( typeof ukmData !== 'undefined' ) ? ukmData : {};
+    const uData         = ( typeof window.ukmData !== 'undefined' ) ? window.ukmData : {};
     const data          = uData.regions       || {};
     const markerIcon    = uData.markerIcon    || '';
     const markerSize    = uData.markerSize    || 32;
@@ -138,40 +137,17 @@
       path.style.fill = ( info && info.color ) ? info.color : mapColor;
     } );
 
-    /* ---- Bind region paths ---- */
-    svg.querySelectorAll( '#features path' ).forEach( function ( path ) {
-      const id   = path.id;
-      if ( !id ) return;
-      const info = data[ id ] || { name: path.getAttribute( 'name' ) || id, projects: [] };
-
-      path.setAttribute( 'tabindex', '0' );
-      path.setAttribute( 'role', 'button' );
-      path.setAttribute( 'aria-label', info.name || id );
-
-      path.addEventListener( 'click', function () {
-        // Find the marker for this region to use as anchor
-        const markerEl = svg.querySelector( '.ukm-marker-group[data-rid="' + id + '"]' );
-        handleActivate( id, markerEl || path );
-      } );
-      path.addEventListener( 'keydown', function ( e ) {
-        if ( e.key === 'Enter' || e.key === ' ' ) {
-          e.preventDefault();
-          const markerEl = svg.querySelector( '.ukm-marker-group[data-rid="' + id + '"]' );
-          handleActivate( id, markerEl || path );
-        }
-      } );
-    } );
+    /* Region paths are visual only — markers are the sole activators */
 
     /* ---- Place SVG markers ---- */
     placeMarkers( svg, data, markerIcon, markerSize, markerColor, handleActivate );
 
-    /* ---- Deselect when clicking outside the widget and outside popup ---- */
+    /* ---- Close popup when clicking anywhere except the active marker or the popup ---- */
     document.addEventListener( 'click', function ( e ) {
-      if ( activeId
-        && !wrap.contains( e.target )
-        && !popup.contains( e.target ) ) {
-        clearActive();
-      }
+      if ( !activeId || popup.contains( e.target ) ) return;
+      const activeMarker = svg.querySelector( '.ukm-marker-group[data-rid="' + activeId + '"]' );
+      if ( activeMarker && activeMarker.contains( e.target ) ) return;
+      clearActive();
     } );
 
     /* =====================================================

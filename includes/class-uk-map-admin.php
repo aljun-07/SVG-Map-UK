@@ -268,7 +268,6 @@ class UK_Map_Admin {
                 var sizeInp         = document.getElementById('ukm-gs-size');
                 var colorInp        = document.getElementById('ukm-gs-color');
                 var mapColorInp     = document.getElementById('ukm-gs-map-color');
-                var selectedColInp  = document.getElementById('ukm-gs-selected-color');
                 var inactiveColInp  = document.getElementById('ukm-gs-inactive-color');
                 var preview        = document.getElementById('ukm-gs-icon-preview');
                 var removeBtn      = document.getElementById('ukm-gs-icon-remove');
@@ -281,7 +280,6 @@ class UK_Map_Admin {
                 sizeInp.value         = gs.marker_size    || 32;
                 colorInp.value        = gs.marker_color   || '#e74c3c';
                 mapColorInp.value     = gs.map_color      || '#6f9c76';
-                selectedColInp.value  = gs.selected_color || '#2271b1';
                 inactiveColInp.value  = gs.inactive_color || '#a8c5ad';
 
                 if ( gs.marker_icon ) {
@@ -335,7 +333,6 @@ class UK_Map_Admin {
                         marker_size:    parseInt( sizeInp.value, 10 ) || 32,
                         marker_color:   colorInp.value,
                         map_color:      mapColorInp.value,
-                        selected_color: selectedColInp.value,
                         inactive_color: inactiveColInp.value,
                     };
                     var body = new URLSearchParams({ action: 'ukm_save_settings', nonce: ukmAdmin.nonce, data: JSON.stringify(data) });
