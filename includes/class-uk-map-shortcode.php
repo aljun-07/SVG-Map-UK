@@ -4,9 +4,9 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Handles the [uk_interactive_map] shortcode.
  *
- * Layout: 70 % map (left) + 30 % permanent side panel (right).
- * The side panel lists all projects by default with a search bar.
- * SVG markers with project counts appear on regions that have ≥1 located project.
+ * Full-width map only — no side panel.
+ * Hovering a region shows a tooltip with the region name, project count,
+ * and clickable project links.
  *
  * Attributes:
  *   width = CSS max-width of the whole widget (default: 1200px)
@@ -32,12 +32,7 @@ class UK_Map_Shortcode {
         ob_start();
         ?>
         <div class="ukm-wrap" style="max-width:<?php echo $width; ?>;">
-            <div class="ukm-layout">
-                <div class="ukm-map-area">
-                    <?php echo $svg; ?>
-                </div>
-                <div class="ukm-side-panel" aria-live="polite"></div>
-            </div>
+            <?php echo $svg; ?>
         </div>
         <?php
         return ob_get_clean();
@@ -70,9 +65,13 @@ class UK_Map_Shortcode {
             'uk-interactive-map',
             'ukmData',
             [
-                'regions'     => $regions,
-                'markerIcon'  => $settings['marker_icon']  ?? '',
-                'markerColor' => $settings['marker_color'] ?? '#e74c3c',
+                'regions'       => $regions,
+                'markerIcon'    => $settings['marker_icon']    ?? '',
+                'markerSize'    => $settings['marker_size']    ?? 32,
+                'markerColor'   => $settings['marker_color']   ?? '#e74c3c',
+                'mapColor'      => $settings['map_color']      ?? '#6f9c76',
+                'selectedColor' => $settings['selected_color'] ?? '#2271b1',
+                'inactiveColor' => $settings['inactive_color'] ?? '#a8c5ad',
             ]
         );
 

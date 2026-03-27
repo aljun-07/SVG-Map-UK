@@ -1,5 +1,5 @@
 /* =========================================================
-   UK Interactive Map — Stylesheet
+   UK Interactive Map — Frontend Stylesheet
    ========================================================= */
 
 .ukm-wrap {
@@ -9,34 +9,12 @@
 }
 
 /* =========================================================
-   70 / 30 layout — map left, panel right
+   Full-width map
    ========================================================= */
-.ukm-layout {
-    display: flex;
-    align-items: stretch;
-    min-height: 400px;
-}
-
-.ukm-map-area {
-    flex: 0 0 70%;
-    max-width: 70%;
-    min-width: 0;
-}
-
-.ukm-map-area svg {
+.ukm-wrap svg {
     display: block;
     width: 100%;
-    height: 100%;
-}
-
-.ukm-side-panel {
-    flex: 0 0 30%;
-    max-width: 30%;
-    display: flex;
-    flex-direction: column;
-    background: #fff;
-    border-left: 2px solid #e8eaed;
-    overflow: hidden;           /* panel itself doesn't scroll */
+    height: auto;
 }
 
 /* =========================================================
@@ -44,36 +22,34 @@
    ========================================================= */
 #features path {
     cursor: pointer;
-    transition: fill 0.15s ease, opacity 0.15s ease;
+    transition: fill 0.2s ease;
     outline: none;
 }
 
 #features path:hover,
 #features path:focus-visible {
-    opacity: 0.72;
+    opacity: 0.82;
 }
 
 #features path.ukm-active {
-    opacity: 0.88;
-    stroke: #1a3a5c !important;
-    stroke-width: 2 !important;
+    opacity: 1;
+    stroke: rgba(0,0,0,0.35) !important;
+    stroke-width: 1.5 !important;
 }
 
 /* =========================================================
    SVG Markers
    ========================================================= */
-
-/* Teardrop pin */
 .ukm-marker__pin {
-    /* fill set inline via JS (markerColor) */
     stroke: rgba(0,0,0,0.25);
     stroke-width: 1;
-    transition: filter 0.15s;
+    transition: filter 0.15s, opacity 0.2s;
 }
 
 .ukm-marker-group {
     cursor: pointer;
     outline: none;
+    transition: opacity 0.2s;
 }
 
 .ukm-marker-group:hover .ukm-marker__pin,
@@ -81,11 +57,14 @@
     filter: brightness(0.85);
 }
 
+/* Active marker — brighter, white stroke */
 .ukm-marker--active .ukm-marker__pin {
-    filter: brightness(0.7);
+    filter: brightness(1.1);
     stroke: #fff;
-    stroke-width: 1.5;
+    stroke-width: 2;
 }
+
+/* Inactive marker — fill color set via JS (inactiveColor setting) */
 
 /* Count text inside default pin */
 .ukm-marker__count {
@@ -102,7 +81,7 @@
     pointer-events: none;
 }
 
-/* Count badge (used with custom icon) */
+/* Count badge (custom icon) */
 .ukm-marker__badge {
     fill: #e74c3c;
     stroke: #fff;
@@ -124,290 +103,92 @@
 }
 
 /* =========================================================
-   Tooltip (hover name label)
+   Popup (positioned beside the clicked marker)
    ========================================================= */
-.ukm-tooltip {
+.ukm-popup {
     position: fixed;
-    z-index: 9999;
-    background: rgba(20, 20, 20, 0.82);
+    z-index: 99999;
+    display: none;
+    background: rgba(18, 18, 18, 0.96);
     color: #fff;
-    font-size: 12px;
-    padding: 4px 9px;
-    border-radius: 4px;
-    pointer-events: none;
-    white-space: nowrap;
+    border-radius: 8px;
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+    min-width: 200px;
+    max-width: 300px;
+    overflow: hidden;
     opacity: 0;
-    transition: opacity 0.1s;
+    transform: translateX(-4px);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    pointer-events: none;
 }
 
-.ukm-tooltip--visible {
+.ukm-popup--visible {
     opacity: 1;
+    transform: translateX(0);
+    pointer-events: auto;
 }
 
-/* =========================================================
-   Side panel — search bar
-   ========================================================= */
-.ukm-panel__search-wrap {
-    padding: 12px 14px 10px;
-    border-bottom: 1px solid #eee;
-    flex-shrink: 0;
-}
-
-.ukm-panel__search {
-    display: block;
-    width: 100%;
-    box-sizing: border-box;
-    padding: 7px 10px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    font-size: 13px;
-    outline: none;
-    background: #f8f8f8;
-    transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-.ukm-panel__search:focus {
-    border-color: #2271b1;
-    box-shadow: 0 0 0 2px rgba(34,113,177,0.18);
-    background: #fff;
-}
-
-/* =========================================================
-   Side panel — body (scrollable)
-   ========================================================= */
-.ukm-panel__body {
-    flex: 1 1 0;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-}
-
-/* =========================================================
-   Side panel — header row (region name + controls)
-   ========================================================= */
-.ukm-panel__header {
+/* Header bar */
+.ukm-popup__header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 14px 8px;
-    border-bottom: 1px solid #f0f0f0;
-    position: sticky;
-    top: 0;
-    background: #fff;
-    z-index: 1;
+    padding: 11px 14px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.ukm-panel__heading {
+.ukm-popup__title {
     font-size: 13px;
     font-weight: 700;
-    color: #1d2327;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.ukm-panel__total {
-    font-size: 12px;
-    background: #e8eaed;
-    color: #555;
-    border-radius: 10px;
-    padding: 1px 7px;
-    flex-shrink: 0;
-    margin-left: 6px;
-}
-
-.ukm-panel__all-btn {
-    background: none;
-    border: 1px solid #ccc;
-    border-radius: 3px;
-    padding: 3px 8px;
-    font-size: 11px;
-    cursor: pointer;
-    color: #2271b1;
-    flex-shrink: 0;
-    white-space: nowrap;
-}
-
-.ukm-panel__all-btn:hover {
-    background: #f0f6fc;
-}
-
-.ukm-panel__empty {
-    padding: 20px 16px;
-    color: #888;
-    font-size: 13px;
-    font-style: italic;
-    margin: 0;
-}
-
-/* =========================================================
-   Project cards
-   ========================================================= */
-.ukm-panel__projects {
-    /* no padding; cards have their own */
-}
-
-.ukm-project-card {
-    border-bottom: 1px solid #f0f0f0;
-    padding: 12px 14px;
-}
-
-.ukm-project-card:last-child {
-    border-bottom: none;
-}
-
-.ukm-project-card__region {
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: #2271b1;
-    margin-bottom: 6px;
-}
-
-.ukm-project-card__image {
-    display: block;
-    width: 100%;
-    max-height: 140px;
-    object-fit: cover;
-    border-radius: 5px;
-    margin-bottom: 8px;
-}
-
-.ukm-project-card__title {
-    font-weight: 700;
-    font-size: 13px;
-    color: #1d2327;
-    margin-bottom: 3px;
     line-height: 1.3;
+    color: #fff;
+    padding-right: 10px;
 }
 
-.ukm-project-card__location {
-    font-size: 11px;
-    color: #888;
-    margin-bottom: 5px;
+.ukm-popup__close {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+    flex-shrink: 0;
+    transition: color 0.1s;
 }
 
-.ukm-project-card__desc {
-    font-size: 12px;
-    line-height: 1.55;
-    color: #444;
-    margin-bottom: 7px;
-}
-
-.ukm-project-card__link {
-    display: inline-block;
-    font-size: 11px;
-    font-weight: 600;
-    color: #2271b1;
-    text-decoration: none;
-    border: 1px solid #2271b1;
-    padding: 3px 9px;
-    border-radius: 3px;
-    transition: background 0.15s, color 0.15s;
-}
-
-.ukm-project-card__link:hover {
-    background: #2271b1;
+.ukm-popup__close:hover {
     color: #fff;
 }
 
-/* =========================================================
-   Admin — two-column layout
-   ========================================================= */
-.ukm-admin-wrap {
-    max-width: 1200px;
-}
-
-#ukm-admin-layout {
-    display: flex;
-    gap: 24px;
-    margin-top: 16px;
-    align-items: flex-start;
-}
-
-#ukm-region-sidebar {
-    flex: 0 0 240px;
-    background: #fff;
-    border: 1px solid #c3c4c7;
-    border-radius: 4px;
-    overflow: hidden;
-}
-
-#ukm-search {
-    display: block;
-    width: 100%;
-    box-sizing: border-box;
-    padding: 8px 10px;
-    border: none;
-    border-bottom: 1px solid #c3c4c7;
-    font-size: 13px;
-    outline: none;
-}
-
-#ukm-search:focus {
-    border-bottom-color: #2271b1;
-    box-shadow: inset 0 -2px 0 #2271b1;
-}
-
-#ukm-region-list {
+/* Project list */
+.ukm-popup__list {
     list-style: none;
     margin: 0;
-    padding: 0;
-    max-height: 600px;
+    padding: 6px 0;
+    max-height: 260px;
     overflow-y: auto;
 }
 
-#ukm-region-list li {
-    padding: 8px 12px;
-    cursor: pointer;
+.ukm-popup__list li {
+    padding: 6px 14px;
     font-size: 13px;
-    color: #1d2327;
-    border-bottom: 1px solid #f0f0f0;
-    transition: background 0.1s;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    line-height: 1.4;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-#ukm-region-list li:hover    { background: #f0f6fc; }
-#ukm-region-list li.ukm-active { background: #2271b1; color: #fff; font-weight: 600; }
-
-#ukm-region-editor {
-    flex: 1;
-    background: #fff;
-    border: 1px solid #c3c4c7;
-    border-radius: 4px;
-    padding: 20px 24px;
-    min-height: 300px;
+.ukm-popup__list li:last-child {
+    border-bottom: none;
 }
 
-.ukm-placeholder  { color: #777; font-style: italic; margin-top: 40px; text-align: center; }
-.ukm-editor-title { margin-top: 0; font-size: 18px; color: #1d2327; border-bottom: 1px solid #f0f0f0; padding-bottom: 10px; margin-bottom: 16px; }
-
-#ukm-region-editor .form-table th { width: 140px; padding-left: 0; }
-#ukm-region-editor .form-table td { padding-left: 10px; }
-
-/* =========================================================
-   Responsive
-   ========================================================= */
-@media (max-width: 900px) {
-    .ukm-layout { flex-direction: column; }
-
-    .ukm-map-area,
-    .ukm-side-panel {
-        flex: none;
-        max-width: 100%;
-        width: 100%;
-    }
-
-    .ukm-side-panel {
-        border-left: none;
-        border-top: 2px solid #e8eaed;
-        max-height: 60vh;
-    }
+.ukm-popup__list a {
+    color: #7ec8f5;
+    text-decoration: none;
 }
 
-@media (max-width: 782px) {
-    #ukm-admin-layout  { flex-direction: column; }
-    #ukm-region-sidebar { flex: none; width: 100%; }
+.ukm-popup__list a:hover {
+    color: #fff;
+    text-decoration: underline;
 }
+
+/* Admin styles are in uk-map-admin.css */
